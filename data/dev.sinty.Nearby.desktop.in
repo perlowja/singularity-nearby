@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Nearby
+Comment=Phone and nearby devices
+Icon=dev.sinty.Nearby
+Exec=@libexecdir@/singularity-nearby
+OnlyShowIn=Singularity;
+NoDisplay=true
+X-GNOME-AutoRestart=true

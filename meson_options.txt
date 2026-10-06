@@ -1,0 +1,2 @@
+option('autostart', type: 'boolean', value: true,
+  description: 'Start the service with the Singularity session through an XDG autostart entry')

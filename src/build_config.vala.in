@@ -1,0 +1,4 @@
+namespace Singularity.Nearby.BuildConfig {
+    public const string SYSCONFDIR = "@SYSCONFDIR@";
+    public const string VERSION = "@VERSION@";
+}
