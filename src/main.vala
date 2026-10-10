@@ -21,6 +21,7 @@ int main(string[] args) {
             try {
                 service = new Service(conn, config, system);
                 conn.register_object("/dev/sinty/Nearby", service);
+                conn.register_object("/dev/sinty/Nearby/Collab", service.collab);
                 service.start();
             } catch (Error e) {
                 critical("nearby: cannot start: %s", e.message);
@@ -41,5 +42,6 @@ int main(string[] args) {
         return Source.REMOVE;
     });
     loop.run();
+    if (service != null) service.collab.save_now();
     return 0;
 }

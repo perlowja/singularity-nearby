@@ -36,6 +36,9 @@ namespace Singularity.Nearby {
         private ReceivedHistory history;
         private Gee.ArrayList<TransferInfo> transfers = new Gee.ArrayList<TransferInfo>();
 
+        [DBus (visible = false)]
+        public Collab collab { get; private set; }
+
         public signal void devices_changed();
         public signal void device_changed(string id);
         public signal void pair_requested(string id, string name, string code);
@@ -130,6 +133,41 @@ namespace Singularity.Nearby {
                 return unpaired < MAX_UNPAIRED;
             });
             lan.link_ready.connect(on_link);
+            collab = new Collab(this, config.dir);
+        }
+
+        [DBus (visible = false)]
+        public Gee.Collection<Device> collab_devices() {
+            return devices.values;
+        }
+
+        [DBus (visible = false)]
+        public Device? collab_device(string id) {
+            return devices[id];
+        }
+
+        [DBus (visible = false)]
+        public void collab_send(Device d, Packet p) {
+            send(d, p);
+        }
+
+        [DBus (visible = false)]
+        public void collab_capabilities_changed() {
+            refresh_discovery();
+        }
+
+        [DBus (visible = false)]
+        public void collab_notify(string summary, string body) {
+            desktop.send_notification.begin(_("Nearby"), Desktop.APP_ID, summary, body, {});
+        }
+
+        [DBus (visible = false)]
+        public void collab_ask(string summary, string body, owned NotificationAction answer) {
+            var hints = new HashTable<string, Variant>(str_hash, str_equal);
+            hints["urgency"] = new Variant.byte(2);
+            hints["resident"] = new Variant.boolean(true);
+            desktop.send_notification.begin(_("Nearby"), Desktop.APP_ID, summary, body,
+                { "accept", _("Accept"), "decline", _("Decline") }, hints, 0, (owned) answer);
         }
 
         [DBus (visible = false)]
@@ -167,13 +205,25 @@ namespace Singularity.Nearby {
                 Packet.NOTIFICATION, Packet.BATTERY, Packet.BATTERY_REQUEST, Packet.FINDMYPHONE, Packet.SMS_MESSAGES,
                 Packet.MPRIS, Packet.MPRIS_REQUEST, Packet.RUNCOMMAND_REQUEST
             });
+            if (collab != null && collab.enabled) {
+                p.set_strv("incomingCapabilities", append(p.get_strv("incomingCapabilities"), LanTransport.PACKET));
+            }
             p.set_strv("outgoingCapabilities", {
                 Packet.PING, Packet.SHARE, Packet.CLIPBOARD, Packet.CLIPBOARD_CONNECT, Packet.NOTIFICATION_REQUEST,
                 Packet.NOTIFICATION_REPLY, Packet.NOTIFICATION_ACTION, Packet.BATTERY, Packet.BATTERY_REQUEST,
                 Packet.FINDMYPHONE, Packet.SMS_REQUEST, Packet.SMS_CONVERSATIONS, Packet.SMS_CONVERSATION,
                 Packet.MPRIS, Packet.MPRIS_REQUEST, Packet.RUNCOMMAND
             });
+            if (collab != null && collab.enabled) {
+                p.set_strv("outgoingCapabilities", append(p.get_strv("outgoingCapabilities"), LanTransport.PACKET));
+            }
             return p;
+        }
+
+        private static string[] append(string[] list, string item) {
+            string[] out = list;
+            out += item;
+            return out;
         }
 
         private void refresh_discovery() {
@@ -220,9 +270,11 @@ namespace Singularity.Nearby {
                 if (!d.paired) devices.unset(d.id);
                 notifications_changed(d.id);
                 devices_changed();
+                collab.people_changed();
             });
             if (d.paired) on_connected(d);
             devices_changed();
+            if (d.paired) collab.lan_connected(d.id);
         }
 
         private void send(Device d, Packet p) {
@@ -314,6 +366,9 @@ namespace Singularity.Nearby {
                     break;
                 case Packet.RUNCOMMAND:
                     d.remote_commands = { p.get_string("commandList", "{}") };
+                    break;
+                case LanTransport.PACKET:
+                    if (collab.enabled) collab.lan.handle(d, p);
                     break;
                 default:
                     break;

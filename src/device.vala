@@ -155,9 +155,8 @@ namespace Singularity.Nearby {
             switch (type) {
                 case "phone":
                 case "smartphone": return "phone-symbolic";
-                case "tablet": return "tablet-symbolic";
-                case "tv": return "video-display-symbolic";
-                case "laptop": return "computer-laptop-symbolic";
+                case "tablet": return "phone-symbolic";
+                case "tv": return "tv-symbolic";
                 default: return "computer-symbolic";
             }
         }

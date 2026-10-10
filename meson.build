@@ -40,14 +40,16 @@ core_sources = [build_config] + files(
   'src/history.vala',
 )
 
-executable('singularity-nearby',
-  core_sources + files(
+service_sources = core_sources + files(
     'src/desktop.vala',
     'src/media.vala',
     'src/obex.vala',
     'src/service.vala',
-    'src/main.vala',
-  ),
+    'src/collab.vala',
+)
+
+executable('singularity-nearby',
+  service_sources + files('src/main.vala'),
   dependencies: deps,
   link_with: helpers,
   include_directories: include_directories('src'),
@@ -77,6 +79,7 @@ if get_option('autostart')
   )
 endif
 install_data('data/nearby.conf', install_dir: get_option('sysconfdir') / 'singularity')
+install_data('data/dev.sinty.Collab1.ini', install_dir: get_option('datadir') / 'singularity' / 'capabilities')
 
 packet_test = executable('nearby-packet-test',
   core_sources + files('tests/packet_test.vala'),
@@ -86,3 +89,15 @@ packet_test = executable('nearby-packet-test',
   vala_args: vala_args,
 )
 test('nearby-packet', packet_test, env: ['TMPDIR=' + meson.current_build_dir()])
+
+collab_test = executable('nearby-collab-test',
+  service_sources + files('tests/collab_test.vala'),
+  dependencies: deps,
+  link_with: helpers,
+  include_directories: include_directories('src'),
+  vala_args: vala_args,
+)
+test('nearby-collab', find_program('dbus-run-session'),
+  args: ['--', collab_test],
+  env: ['TMPDIR=' + meson.current_build_dir()],
+)

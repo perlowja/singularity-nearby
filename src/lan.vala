@@ -184,6 +184,7 @@ namespace Singularity.Nearby {
                 yield socket.output_stream.write_all_async(hello.serialize().data, Priority.DEFAULT, null, out written);
                 string? trusted = trust(device_id);
                 var tls = yield Tls.handshake(socket, true, own, trusted, null);
+                socket.socket.timeout = 0;
                 yield finish(tls, address, device_id, protocol);
             } catch (Error e) {
                 debug("nearby: connecting to %s failed: %s", device_id, e.message);
