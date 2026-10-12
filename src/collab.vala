@@ -218,7 +218,15 @@ namespace Singularity.Nearby {
         public Gee.HashMap<string, string> peers = new Gee.HashMap<string, string>();
         public Gee.ArrayList<string> pending = new Gee.ArrayList<string>();
         public Gee.ArrayList<string> log = new Gee.ArrayList<string>();
+        public Gee.ArrayList<string> journal = new Gee.ArrayList<string>();
         public string snapshot = "";
+        public const int JOURNAL = 2000;
+        public const int KEEP_SNAPSHOT = 1024 * 1024;
+
+        public void remember(string data) {
+            journal.add(data);
+            while (journal.size > JOURNAL) journal.remove_at(0);
+        }
 
         public bool hosting { get { return host == ""; } }
 
@@ -236,6 +244,10 @@ namespace Singularity.Nearby {
             var waiting = new Json.Array();
             foreach (string person in pending) waiting.add_string_element(person);
             o.set_array_member("pending", waiting);
+            if (snapshot.length <= KEEP_SNAPSHOT) o.set_string_member("snapshot", snapshot);
+            var j = new Json.Array();
+            foreach (string op in journal) j.add_string_element(op);
+            o.set_array_member("journal", j);
             return o;
         }
 
@@ -253,6 +265,10 @@ namespace Singularity.Nearby {
             }
             if (o.has_member("pending")) {
                 o.get_array_member("pending").foreach_element((a, i, node) => s.pending.add(node.get_string()));
+            }
+            s.snapshot = o.get_string_member_with_default("snapshot", "");
+            if (o.has_member("journal")) {
+                o.get_array_member("journal").foreach_element((a, i, node) => s.journal.add(node.get_string()));
             }
             return s;
         }
@@ -533,7 +549,7 @@ namespace Singularity.Nearby {
             m.set_string_member("payload", payload);
             m.set_string_member("text", text);
             post_message(person, m, true);
-            remember(false, person, kind, title, true);
+            if (kind != "Message") remember(false, person, kind, title, true);
         }
 
         public string share(string person, string kind, string title, string snapshot, string role, BusName sender) throws CollabError, DBusError, IOError {
@@ -597,6 +613,8 @@ namespace Singularity.Nearby {
             m.set_string_member("session", s.id);
             m.set_string_member("data", data);
             m.set_string_member("by", service.name);
+            s.remember(data);
+            schedule_save();
             if (s.hosting) {
                 s.log.add(data);
                 while (s.log.size > MAX_LOG) s.log.remove_at(0);
@@ -677,6 +695,13 @@ namespace Singularity.Nearby {
                 out += d;
             }
             return out;
+        }
+
+        public void replay(string session, out string snapshot, out string[] ops) throws CollabError, DBusError, IOError {
+            var s = sessions[session];
+            if (s == null) throw new CollabError.NO_SESSION("no such session");
+            snapshot = s.snapshot;
+            ops = s.journal.to_array();
         }
 
         public string get_snapshot(string session) throws CollabError, DBusError, IOError {
@@ -781,6 +806,7 @@ namespace Singularity.Nearby {
                 case "Database": return _("a database");
                 case "Formula": return _("a formula");
                 case "Publication": return _("a publication");
+                case "Message": return _("a message");
                 default: return _("an item");
             }
         }
@@ -796,6 +822,11 @@ namespace Singularity.Nearby {
                 if (invite) reply_answer(person, m.get_string_member_with_default("session", ""), false);
                 remember(true, person, kind, title, false);
                 service.collab_notify(_("Could Not Receive"), _("%s sent you %s, but no installed app can open it.").printf(name, kind_label(kind)));
+                return;
+            }
+            if (kind == "Message" && !invite) {
+                call_app(bus, path, target_interface(kind), "Receive",
+                    new Variant("(sss)", person, m.get_string_member_with_default("payload", ""), name));
                 return;
             }
             string id = Uuid.string_random();
@@ -926,6 +957,8 @@ namespace Singularity.Nearby {
             if (m.has_member("ops")) {
                 var ops = m.get_array_member("ops");
                 uint n = ops.get_length();
+                for (uint i = 0; i < n; i++) s.remember(ops.get_string_element(i));
+                schedule_save();
                 Timeout.add(1500, () => {
                     for (uint i = 0; i < n; i++) received(sid, s.host_name, ops.get_string_element(i));
                     return Source.REMOVE;
@@ -943,6 +976,8 @@ namespace Singularity.Nearby {
                 if (!s.peers.has_key(person)) return;
                 if (s.role == "view") return;
                 author = s.peers[person];
+                s.remember(data);
+                schedule_save();
                 s.log.add(data);
                 while (s.log.size > MAX_LOG) s.log.remove_at(0);
                 var m = new Json.Object();
@@ -954,6 +989,8 @@ namespace Singularity.Nearby {
             } else {
                 if (s.host != person) return;
                 author = op.get_string_member_with_default("by", s.host_name);
+                s.remember(data);
+                schedule_save();
             }
             received(sid, author, data);
         }
