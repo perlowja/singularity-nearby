@@ -101,3 +101,15 @@ test('nearby-collab', find_program('dbus-run-session'),
   args: ['--', collab_test],
   env: ['TMPDIR=' + meson.current_build_dir()],
 )
+
+link_test = executable('nearby-link-test',
+  service_sources + files('tests/link_test.vala'),
+  dependencies: deps,
+  link_with: helpers,
+  include_directories: include_directories('src'),
+  vala_args: vala_args,
+)
+test('nearby-link', find_program('dbus-run-session'),
+  args: ['--', link_test],
+  env: ['TMPDIR=' + meson.current_build_dir()],
+)
