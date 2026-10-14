@@ -259,7 +259,6 @@ namespace Singularity.Nearby {
                 d.record.last_address = d.address;
                 save();
             }
-            // The handlers capture the link; disconnect them so it can be freed.
             ulong packet_handler = 0;
             ulong closed_handler = 0;
             packet_handler = link.packet_received.connect((p) => on_packet(d, p));
