@@ -238,7 +238,7 @@ namespace Singularity.Nearby {
             lan.broadcast(config.discoverable, unicast);
         }
 
-        private void on_link(Link link) {
+        internal void on_link(Link link) {
             var d = devices[link.device_id];
             if (d == null) {
                 d = new Device(link.device_id);
@@ -259,8 +259,12 @@ namespace Singularity.Nearby {
                 d.record.last_address = d.address;
                 save();
             }
-            link.packet_received.connect((p) => on_packet(d, p));
-            link.closed.connect(() => {
+            ulong packet_handler = 0;
+            ulong closed_handler = 0;
+            packet_handler = link.packet_received.connect((p) => on_packet(d, p));
+            closed_handler = link.closed.connect(() => {
+                link.disconnect(packet_handler);
+                link.disconnect(closed_handler);
                 if (d.link != link) return;
                 d.link = null;
                 if (d.pair_state == PairState.REQUESTED || d.pair_state == PairState.INCOMING) end_pairing(d, PairState.NONE);
